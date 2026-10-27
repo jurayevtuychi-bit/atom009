@@ -1,0 +1,85 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repozitoriyni yuklab olish (Checkout)
+        uses: actions/checkout@v4
+
+      - name: Node.js 20 o'rnatish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Java JDK 21 o'rnatish (Capacitor 6 va Gradle 8 uchun)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Web fayllarni (www/index.html) tayyorlash
+        run: |
+          mkdir -p www
+          if [ -f "atom_fizikasi_app.html" ] && [ ! -f "www/index.html" ]; then
+            cp atom_fizikasi_app.html www/index.html
+          elif [ -f "index.html" ] && [ ! -f "www/index.html" ]; then
+            cp index.html www/index.html
+          fi
+          ls -la www/
+
+      - name: package.json va capacitor.config.json yaratish
+        run: |
+          cat << 'EOF' > package.json
+          {
+            "name": "atom-fizikasi-pro",
+            "version": "3.0.0",
+            "description": "Atom Fizikasi - Mobil Ilova",
+            "main": "www/index.html",
+            "scripts": {
+              "build": "echo 'Static build ready'"
+            },
+            "dependencies": {
+              "@capacitor/android": "^6.0.0",
+              "@capacitor/cli": "^6.0.0",
+              "@capacitor/core": "^6.0.0"
+            }
+          }
+          EOF
+
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "uz.tabiiyfanlar.atomfizikasi",
+            "appName": "Atom Fizikasi",
+            "webDir": "www",
+            "bundledWebRuntime": false
+          }
+          EOF
+
+      - name: Capacitor va Android platformani o'rnatish
+        run: |
+          npm install
+          rm -rf android
+          npx cap add android
+          npx cap copy android
+          npx cap sync android
+
+      - name: Gradle orqali APK faylni yig'ish (assembleDebug)
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Tayyor APK faylni Artifacts bo'limiga yuklash
+        uses: actions/upload-artifact@v4
+        with:
+          name: AtomFizikasi-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
